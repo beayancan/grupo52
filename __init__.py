@@ -267,7 +267,7 @@ def add_message():
         return jsonify(), 404
     # Retorna el id del elemento insertado
     else:
-        return jsonify({"id": str(inserted_message._id)}), 200
+        return jsonify({"id": str(inserted_message.inserted_id)}), 200
 
 
 @app.route('/remove_message/<int:id_message>', methods=['DELETE'])
