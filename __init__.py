@@ -5,6 +5,7 @@ import json
 from collections import deque
 
 app = Flask(__name__)
+app.config['JSONIFY_PRETTYPRINT_REGULAR'] = True
 
 MONGODATABASE = "grupo52"  # nombre que DEBE tener la base de datos
 MONGOSERVER = "localhost"
@@ -12,65 +13,17 @@ MONGOPORT = 27017
 
 client = MongoClient(MONGOSERVER, MONGOPORT)
 
-
-@app.route('/message_id/<int:id_message>', methods=['GET'])
-def message_id(id_message):
+def obtener_indice():
     mongodb = client[MONGODATABASE]
     collection = mongodb.messages
-    output = []
-
-    # iteramos sobre la consulta de tipo mongo(sintaxis importante)
-    for s in collection.find({"_id": id_message}, {"_id": 1,
-                                                   "message": 1,
-                                                   "date": 1,
-                                                   "lat": 1,
-                                                   "long": 1,
-                                                   "receptant": 1,
-                                                   "sender": 1}):
-        output.append(s)  # todo se guarda en una lista
-
-    if len(output) == 0:
-        return jsonify(), 404  # en caso de falla
-    else:
-        return jsonify(output), 200
-
-
-@app.route('/user_messages/<int:id_user>', methods=['GET'])
-def user_messages(id_user):
-    mongodb = client[MONGODATABASE]
-    collection = mongodb.usuarios  # necesitamos las dos colecciones
-    collection_1 = mongodb.messages
-    output = []
-    messages = []
-
-    # primero buscamos al usuario
-    for s in collection.find({"_id": id_user}, {"_id": 1,
-                                                "nombre": 1,
-                                                "apellido": 1,
-                                                "clave": 1,
-                                                "correo": 1,
-                                                "edad": 1,
-                                                "nombre": 1,
-                                                "sexo": 1}):
+    output = list()
+    for s in collection.find({}, {"_id": 1}):
         output.append(s)
 
-    # luego buscamos todos los mensajes enviados por este usuario
-    for s in collection_1.find({"sender": id_user}, {"message": 1,
-                                                     "date": 1,
-                                                     "lat": 1,
-                                                     "long": 1,
-                                                     "receptant": 1}):
-        messages.append(s)
-
-    # ordenamos los mensajes segun fecha
-    smessages = sorted(messages, key=lambda k: k['date'])
-    # los agregamos como atributo a nuestro unico usuario
-    output[0]["messages"] = smessages
-    if len(output) == 0:
-        return jsonify(), 404
-    else:
-        # retornamos este unico usuario
-        return jsonify(output[0]), 200
+    indices = list()
+    for cosa in output:
+        indices.append(cosa["_id"])
+    return max(indices) + 1
 
 
 @app.route('/between_users/<int:id_user_1>/<int:id_user_2>', methods=['GET'])
@@ -111,133 +64,6 @@ def between_users(id_user_1, id_user_2):
         return jsonify(noutput), 200
 
 
-@app.route('/find_words/', methods=['GET'])
-@app.route('/find_words/<frases>', methods=['GET'])
-def find_words(frases=None):
-    mongodb = client[MONGODATABASE]
-    collection = mongodb.messages
-    output = []
-    frases = json.loads(frases)  # cargamos el diccionario con las frases
-    if not frases:  # en caso de estar vacio arroja error
-        return jsonify("Necesitas agregar frases para buscar"), 404
-    else:
-        busqueda = arreglar_frases(frases)  # lo arregla para la busqueda
-
-    for s in collection.find({"$text": {"$search": busqueda}}, {"_id": 1,
-                                                                "message": 1,
-                                                                "date": 1,
-                                                                "lat": 1,
-                                                                "long": 1,
-                                                                "receptant": 1,
-                                                                "sender": 1}):
-        output.append(s)
-
-    if len(output) == 0:
-        return jsonify(), 404  # en caso de falla
-    else:
-        return jsonify(output), 200
-
-
-@app.route('/find_words_2/', methods=['GET'])
-@app.route('/find_words_2/<frases>', methods=['GET'])
-def find_words_2(frases=None):
-    mongodb = client[MONGODATABASE]
-    collection = mongodb.messages
-    output = list()
-    frases = json.loads(frases)  # cargamos el diccionario con las frases
-    if not frases:  # en caso de estar vacio arroja error
-        return jsonify("Necesitas agregar frases para buscar"), 404
-
-    while frases:
-        auxiliar = frases.pop()
-        busqueda = f"\"{auxiliar}\""
-        for s in collection.find({"$text": {"$search": busqueda}}, {"_id": 1,
-                                                                    "message": 1,
-                                                                    "date": 1,
-                                                                    "lat": 1,
-                                                                    "long": 1,
-                                                                    "receptant": 1,
-                                                                    "sender": 1}):
-            output.append(s)
-    noutput = list()
-    for tupla in output:
-        if not tupla in noutput:
-            noutput.append(tupla)
-
-    if len(noutput) == 0:
-        return jsonify(), 404  # en caso de falla
-    else:
-        return jsonify(noutput), 200
-
-
-@app.route('/not_find_words/', methods=['GET'])
-@app.route('/not_find_words/<frases>', methods=['GET'])
-def not_find_words(frases=None):
-    mongodb = client[MONGODATABASE]
-    collection = mongodb.messages
-    output = []
-    retorno = list()
-    frases = json.loads(frases)  # cargamos el diccionario con las frases
-    if not frases:  # en caso de estar vacio arroja error
-        return jsonify("Necesitas agregar frases"), 404
-    else:
-        busqueda = arreglar_frases(frases)  # lo arregla para la busqueda
-
-    while frases:
-        auxiliar = frases.pop()
-        busqueda = f"\"{auxiliar}\""
-        for s in collection.find({"$text": {"$search": busqueda}}, {"_id": 1,
-                                                                    "message": 1,
-                                                                    "date": 1,
-                                                                    "lat": 1,
-                                                                    "long": 1,
-                                                                    "receptant": 1,
-                                                                    "sender": 1}):
-            output.append(s)
-    noutput = list()
-    for tupla in output:
-        if not tupla in noutput:
-            noutput.append(tupla)
-
-    for s in collection.find({}, {"_id": 1,
-                                  "message": 1,
-                                  "date": 1,
-                                  "lat": 1,
-                                  "long": 1,
-                                  "receptant": 1,
-                                  "sender": 1}):
-        if s not in output:
-            retorno.append(s)
-
-    if len(retorno) == 0:
-        return jsonify(), 404  # en caso de falla
-    else:
-        return jsonify(retorno), 200
-
-
-def arreglar_frases(frases):  # funcion auxiliar que intruduce los simbolos necesarios
-    frases = deque(frases)  # para la busqueda
-    retorno = ""
-    if len(frases) == 0:
-        return None
-    else:
-        while frases:  # utilizaremos una cantidad no determinada de frases a ingresar
-            frase = frases.popleft()
-            retorno += f"\"{frase}\""
-        return retorno
-
-
-def arreglar_frases_2(frases):  # funcion auxiliar que intruduce los simbolos necesarios
-    frases = deque(frases)  # para la busqueda
-    retorno = ""
-    if len(frases) == 0:
-        return None
-    else:
-        while frases:  # utilizaremos una cantidad no determinada de frases a ingresar
-            frase = frases.popleft()
-            retorno += f"-\"{frase}\""
-        return retorno
-
 
 @app.route('/add_message/', methods=['POST'])
 def add_message():
@@ -270,38 +96,123 @@ def add_message():
         return jsonify({"id": str(inserted_message.inserted_id)}), 200
 
 
-@app.route('/remove_message/<int:id_message>', methods=['DELETE'])
-def remove_message(id_message):
+
+@app.route('/mensajes_enviados/<int:id_user>', methods=['GET'])
+def mensajes_enviados(id_user):
     mongodb = client[MONGODATABASE]
-    messages = mongodb.messages
-    result = messages.delete_one({
-        '_id': id_message,
-    })
+    collection = mongodb.usuarios  # necesitamos las dos colecciones
+    collection_1 = mongodb.messages
+    output = []
+    messages = []
+    mensajes_enviados = []
 
-    if result.deleted_count == 0:
-        return jsonify(), 404
-    else:
-        return jsonify("Eliminado"), 200
-
-
-@app.route('/')
-def hello_world():
-    print(123, file=sys.stdout)
-    return jsonify({"status": "ok"})
-
-
-def obtener_indice():
-    mongodb = client[MONGODATABASE]
-    collection = mongodb.messages
-    output = list()
-    for s in collection.find({}, {"_id": 1}):
+    # primero buscamos al usuario
+    for s in collection.find({"_id": id_user}, {"_id": 1,
+                                                "nombre": 1,
+                                                "apellido": 1,
+                                                "clave": 1,
+                                                "correo": 1,
+                                                "edad": 1,
+                                                "nombre": 1,
+                                                "sexo": 1}):
         output.append(s)
 
-    indices = list()
-    for cosa in output:
-        indices.append(cosa["_id"])
-    return max(indices) + 1
+    # luego buscamos todos los mensajes enviados por este usuario
+    for s in collection_1.find({"sender": id_user}, {"message": 1,
+                                                     "date": 1,
+                                                     "lat": 1,
+                                                     "long": 1,
+                                                     "receptant": 1}):
+        messages.append(s)
 
+    # ordenamos los mensajes segun fecha
+    smessages = sorted(messages, key=lambda k: k['date'])
+    # los agregamos como atributo a nuestro unico usuario
+    output[0]["messages"] = smessages
+
+    if len(output) == 0:
+        print('asd')
+        return jsonify(), 404
+    else:
+        # retornamos este unico usuario
+        return jsonify(output[0]), 200
+
+@app.route('/mensajes_recibidos/<int:id_user>', methods=['GET'])
+def mensajes_recibidos(id_user):
+    mongodb = client[MONGODATABASE]
+    collection = mongodb.usuarios  # necesitamos las dos colecciones
+    collection_1 = mongodb.messages
+    output = []
+    messages = []
+    mensajes_recibidos = []
+
+    # primero buscamos al usuario
+    for s in collection.find({"_id": id_user}, {"_id": 1,
+                                                "nombre": 1,
+                                                "apellido": 1,
+                                                "clave": 1,
+                                                "correo": 1,
+                                                "edad": 1,
+                                                "nombre": 1,
+                                                "sexo": 1}):
+        output.append(s)
+
+    # luego buscamos todos los mensajes enviados por este usuario
+    for s in collection_1.find({"receptant": id_user}, {"message": 1,
+                                                     "date": 1,
+                                                     "lat": 1,
+                                                     "long": 1,
+                                                     "sender": 1}):
+        messages.append(s)
+
+    # ordenamos los mensajes segun fecha
+    smessages = sorted(messages, key=lambda k: k['date'])
+    # los agregamos como atributo a nuestro unico usuario
+    output[0]["messages"] = smessages
+
+
+    if len(output) == 0:
+        return jsonify(), 404
+    else:
+        # retornamos este unico usuario
+        return jsonify(output[0]), 200
+
+@app.route('/find_words/', methods=['GET'])
+@app.route('/find_words/<frases>', methods=['GET'])
+def find_words(frases=None):
+    mongodb = client[MONGODATABASE]
+    collection = mongodb.messages
+    output = []
+    frases = json.loads(frases)  # cargamos el diccionario con las frases
+    if not frases:  # en caso de estar vacio arroja error
+        return jsonify("Necesitas agregar frases para buscar"), 404
+    else:
+        busqueda = arreglar_frases(frases)  # lo arregla para la busqueda
+
+    for s in collection.find({"$text": {"$search": busqueda}}, {"_id": 1,
+                                                                "message": 1,
+                                                                "date": 1,
+                                                                "lat": 1,
+                                                                "long": 1,
+                                                                "receptant": 1,
+                                                                "sender": 1}):
+        output.append(s)
+
+    if len(output) == 0:
+        return jsonify(), 404  # en caso de falla
+    else:
+        return jsonify(output), 200
+
+def arreglar_frases(frases):  # funcion auxiliar que intruduce los simbolos necesarios
+    frases = deque(frases)  # para la busqueda
+    retorno = ""
+    if len(frases) == 0:
+        return None
+    else:
+        while frases:  # utilizaremos una cantidad no determinada de frases a ingresar
+            frase = frases.popleft()
+            retorno += f"\"{frase}\""
+        return retorno
 
 if __name__ == '__main__':
     # Pueden definir su puerto para correr la aplicación
